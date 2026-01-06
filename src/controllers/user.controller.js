@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import { AsyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteOnCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
@@ -121,8 +121,6 @@ export const registerUser = AsyncHandler(async (req, res) => {
 
   const avatar = await uploadOnCloudinary(avatarLocalPath);
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-  console.log(avatar);
-  console.log(coverImage);
 
   if (!avatar) {
     await removeFiles(avatarLocalPath, coverImageLocalPath);
@@ -132,7 +130,9 @@ export const registerUser = AsyncHandler(async (req, res) => {
   const user = await User.create({
     fullName,
     avatar: avatar.url,
+    avatar_public_id: avatar.public_id,
     coverImage: coverImage?.url || "",
+    coverImage_public_id: coverImage?.public_id || "",
     email,
     password,
     username: username.toLowerCase(),
@@ -328,7 +328,7 @@ export const updateAccountDetails = AsyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Account details updated successfully"));
 });
 
-const updateUserAvatar = AsyncHandler(async (req, res) => {
+export const updateUserAvatar = AsyncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path;
 
   if (!avatarLocalPath) {
@@ -341,11 +341,16 @@ const updateUserAvatar = AsyncHandler(async (req, res) => {
     throw new ApiError(400, "Error while uploading on avatar");
   }
 
+  if (req.user?.avatar_public_id) {
+    await deleteOnCloudinary(req.user.avatar_public_id);
+  }
+
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
         avatar: avatar.url,
+        avatar_public_id: avatar.public_id,
       },
     },
     { new: true }
@@ -356,7 +361,7 @@ const updateUserAvatar = AsyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Avatar image updated successfully"));
 });
 
-const updateUserCoverImage = AsyncHandler(async (req, res) => {
+export const updateUserCoverImage = AsyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
 
   if (!coverImageLocalPath) {
@@ -369,11 +374,16 @@ const updateUserCoverImage = AsyncHandler(async (req, res) => {
     throw new ApiError(400, "Error while uploading on cover Image");
   }
 
+  if (req.user?.coverImage_public_id) {
+    await deleteOnCloudinary(req.user.coverImage_public_id);
+  }
+
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
         coverImage: coverImage.url,
+        coverImage_public_id: coverImage.public_id,
       },
     },
     { new: true }
