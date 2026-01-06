@@ -28,10 +28,9 @@ const uploadOnCloudinary = async (localFilePath, folder = "uploads") => {
 
     await removeLocalFile(localFilePath);
 
-    return {
-      url: response.secure_url,
-      public_id: response.public_id,
-    };
+    console.log("Uploaded to Cloudinary:", response);
+
+    return response;
   } catch (error) {
     console.error("Cloudinary upload failed:", error);
     await removeLocalFile(localFilePath);
