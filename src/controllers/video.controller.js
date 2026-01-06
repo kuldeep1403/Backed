@@ -6,6 +6,105 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { Video } from "../models/video.model.js";
 import { deleteOnCloudinary } from "../utils/cloudinary.js";
 
+export const getAllVideosPublic = AsyncHandler(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const skip = (page - 1) * limit;
+
+  const [videos, totalVideos] = await Promise.all([
+    Video.find({ isPublished: true })
+      .skip(skip)
+      .limit(limit)
+      .populate("owner", "username fullName coverImage")
+      .sort({ createdAt: -1 }),
+
+    Video.countDocuments({ isPublished: true }),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        videos,
+        pagination: {
+          totalVideos,
+          currentPage: page,
+          totalPages: Math.ceil(totalVideos / limit),
+          limit,
+        },
+      },
+      "Videos fetched successfully"
+    )
+  );
+});
+
+export const searchSuggestions = AsyncHandler(async (req, res) => {
+  const { q } = req.query;
+
+  if (!q || q.length < 2) return res.json([]);
+
+  const suggestions = await Video.find(
+    {
+      title: { $regex: `^${q}`, $options: "i" },
+      isPublished: true,
+    },
+    { title: 1 }
+  ).limit(10);
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      suggestions.map((v) => v.title),
+      "Search suggestions fetched"
+    )
+  );
+});
+
+export const getAllVideos = AsyncHandler(async (req, res) => {
+  const { q } = req.query;
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const skip = (page - 1) * limit;
+
+  if (!q || q.trim().length < 2) {
+    throw new ApiError(400, "Search query must be at least 2 characters");
+  }
+
+  const [videos, total] = await Promise.all([
+    Video.find(
+      {
+        $text: { $search: q },
+        isPublished: true,
+      },
+      { score: { $meta: "textScore" } }
+    )
+      .sort({ score: { $meta: "textScore" } })
+      .skip(skip)
+      .limit(limit)
+      .populate("owner", "username fullName coverImage"),
+
+    Video.countDocuments({
+      $text: { $search: q },
+      isPublished: true,
+    }),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        videos,
+        pagination: {
+          total,
+          page,
+          totalPages: Math.ceil(total / limit),
+          limit,
+        },
+      },
+      "Search results fetched"
+    )
+  );
+});
+
 export const getAllVideosOfUser = AsyncHandler(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) {
